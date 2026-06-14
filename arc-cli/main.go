@@ -4,7 +4,7 @@ Copyright © 2026 NAME HERE <EMAIL ADDRESS>
 */
 package main
 
-import "github.com/arc/cmd"
+import "github.com/arc/arc-cli/cmd"
 
 func main() {
 	cmd.Execute()

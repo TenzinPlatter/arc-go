@@ -10,53 +10,74 @@ import (
 	"net/http"
 	"path/filepath"
 
-	"github.com/arc/common"
+	"github.com/arc/internal"
+	"github.com/arc/internal/shortcut"
 	"github.com/spf13/cobra"
 )
 
 type server struct {
-	config *common.Config
+	config *internal.Config
+	apiClient *shortcut.Client
 }
 
 // serveCmd represents the serve command
 var serveCmd = &cobra.Command{
 	Use:   "serve",
-	Short: "A brief description of your command",
+	Short: "Run the http server",
 	Run:   serve,
 }
 
 func init() {
 	rootCmd.AddCommand(serveCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// serveCmd.PersistentFlags().String("notes-dir", "", "The directory with all your notes")
-	// serveCmd.MarkFlagRequired("notes-dir")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// serveCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
 func serve(cmd *cobra.Command, args []string) {
-	config, err := common.ParseConfig( "/home/tenzin/.config/arc/config.yaml")
+	config, err := internal.ParseConfig("/home/tenzin/.config/arc/config.yaml")
 	if err != nil {
 		log.Fatal("Failed to parse config: " + err.Error())
 	}
+	apiClient := shortcut.NewClient(config.ApiToken)
 
-	server := server{config: &config}
+	server := server{config: &config, apiClient: &apiClient}
 	http.HandleFunc("/notes", server.notes)
+	http.HandleFunc("/iterations", server.iterations)
 
 	address := "0.0.0.0:8090"
 	fmt.Println("Listening on: " + address)
 	http.ListenAndServe(address, nil)
 }
 
+func (s *server) iterations(w http.ResponseWriter, req *http.Request) {
+	iterations, err := s.apiClient.GetAllIterations()
+	if err != nil {
+		fmt.Printf("Error fetching iterations: %s\n", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if len(iterations) == 0 {
+		fmt.Println("No iterations")
+	}
+
+	for _, it := range iterations {
+		var active string
+		if it.IsStarted()  {
+			active = "True"
+		} else {
+			active = "False"
+		}
+
+		fmt.Printf("Iteration:\n")
+		fmt.Printf("	Name: %s\n", it.Name)
+		fmt.Printf("	Active: %s\n", active)
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
 func (s *server) notes(w http.ResponseWriter, req *http.Request) {
-	// if not a GET request
 	if req.Method != "" && req.Method != "GET" {
+		// not a GET request
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
