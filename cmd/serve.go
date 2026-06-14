@@ -10,11 +10,12 @@ import (
 	"net/http"
 	"path/filepath"
 
+	"github.com/arc/common"
 	"github.com/spf13/cobra"
 )
 
-type Context struct {
-	notesDir string
+type server struct {
+	config *common.Config
 }
 
 // serveCmd represents the serve command
@@ -31,8 +32,8 @@ func init() {
 
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
-	serveCmd.PersistentFlags().String("notes-dir", "", "The directory with all your notes")
-	serveCmd.MarkFlagRequired("notes-dir")
+	// serveCmd.PersistentFlags().String("notes-dir", "", "The directory with all your notes")
+	// serveCmd.MarkFlagRequired("notes-dir")
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
@@ -40,29 +41,29 @@ func init() {
 }
 
 func serve(cmd *cobra.Command, args []string) {
-	notesDir, err := cmd.Flags().GetString("notes-dir")
+	config, err := common.ParseConfig( "/home/tenzin/.config/arc/config.yaml")
 	if err != nil {
-		// this should never get hit, flag is required
-		log.Fatal("notes-dir must have a value")
+		log.Fatal("Failed to parse config: " + err.Error())
 	}
-	ctx := Context{notesDir: notesDir}
-	http.HandleFunc("/notes", ctx.notes)
+
+	server := server{config: &config}
+	http.HandleFunc("/notes", server.notes)
 
 	address := "0.0.0.0:8090"
 	fmt.Println("Listening on: " + address)
 	http.ListenAndServe(address, nil)
 }
 
-func (ctx *Context) notes(w http.ResponseWriter, req *http.Request) {
+func (s *server) notes(w http.ResponseWriter, req *http.Request) {
 	// if not a GET request
 	if req.Method != "" && req.Method != "GET" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	fmt.Println("notes-dir: " + ctx.notesDir)
+	fmt.Println("notes-dir: " + s.config.NotesDir)
 	entries := []fs.DirEntry{}
-	err := filepath.WalkDir(ctx.notesDir, func(path string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(s.config.NotesDir, func(path string, d fs.DirEntry, err error) error {
 		// if d is a dir we want to return nil, but returning err is fine since if we got to that
 		// check err == nil
 		if err != nil {
@@ -76,7 +77,7 @@ func (ctx *Context) notes(w http.ResponseWriter, req *http.Request) {
 
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		errMsg := fmt.Sprintf("Failed to read notes-dir at %s: %s", ctx.notesDir, err.Error())
+		errMsg := fmt.Sprintf("Failed to read notes-dir at %s: %s", s.config.NotesDir, err.Error())
 		w.Write([]byte(errMsg))
 		return
 	}
