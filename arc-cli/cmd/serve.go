@@ -16,7 +16,7 @@ import (
 )
 
 type server struct {
-	config *internal.Config
+	config    *internal.Config
 	apiClient *shortcut.Client
 }
 
@@ -29,10 +29,16 @@ var serveCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(serveCmd)
+	rootCmd.PersistentFlags().String("config-file", "~/.config/arc/config.toml", "The path to your config.toml file")
 }
 
 func serve(cmd *cobra.Command, args []string) {
-	config, err := internal.ParseConfig("/home/tenzin/.config/arc/config.yaml")
+	configPathOverride, err := cmd.Flags().GetString("config-file")
+	if err != nil {
+		log.Fatal("Failed to read config-file flag" + err.Error())
+	}
+
+	config, err := internal.ParseConfig(configPathOverride)
 	if err != nil {
 		log.Fatal("Failed to parse config: " + err.Error())
 	}
@@ -61,7 +67,7 @@ func (s *server) iterations(w http.ResponseWriter, req *http.Request) {
 
 	for _, it := range iterations {
 		var active string
-		if it.IsStarted()  {
+		if it.IsStarted() {
 			active = "True"
 		} else {
 			active = "False"

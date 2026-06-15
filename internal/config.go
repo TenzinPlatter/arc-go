@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/knadh/koanf/parsers/yaml"
+	"github.com/knadh/koanf/parsers/toml"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
 )
@@ -40,7 +40,7 @@ func ParseConfig(filePath string) (Config, error) {
 		return Config{}, nil
 	}
 
-	if err := k.Load(file.Provider(filePath), yaml.Parser()); err != nil {
+	if err := k.Load(file.Provider(filePath), toml.Parser()); err != nil {
 		return Config{}, fmt.Errorf("error loading config: %v", err)
 	}
 
