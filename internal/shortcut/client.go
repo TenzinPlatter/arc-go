@@ -73,8 +73,8 @@ func (c *Client) GetActiveIterations() ([]Iteration, error) {
 		return nil, err
 	}
 
-	// should always be three active iterations
-	active := make([]Iteration, 3)
+	// should always be three active iterations, fine if not just more allocations
+	active := []Iteration{}
 	for _, it := range iterations {
 		if it.IsStarted() {
 			active = append(active, it)

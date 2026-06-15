@@ -4,6 +4,7 @@ Copyright © 2026 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"log"
@@ -55,7 +56,15 @@ func serve(cmd *cobra.Command, args []string) {
 }
 
 func (s *server) iterations(w http.ResponseWriter, req *http.Request) {
-	iterations, err := s.apiClient.GetAllIterations()
+	active := req.URL.Query().Get("active")
+	var iterations []shortcut.Iteration
+	var err error
+
+	if active == "true" {
+		iterations, err = s.apiClient.GetActiveIterations()
+	} else {
+		iterations, err = s.apiClient.GetAllIterations()
+	}
 	if err != nil {
 		slog.Error("Error fetching iterations", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -66,20 +75,15 @@ func (s *server) iterations(w http.ResponseWriter, req *http.Request) {
 		slog.Warn("No iterations")
 	}
 
-	for _, it := range iterations {
-		var active string
-		if it.IsStarted() {
-			active = "True"
-		} else {
-			active = "False"
-		}
-
-		fmt.Printf("Iteration:\n")
-		fmt.Printf("	Name: %s\n", it.Name)
-		fmt.Printf("	Active: %s\n", active)
+	iterationsJson, err := json.Marshal(iterations)
+	if err != nil {
+		slog.Error("Error turning iterations into JSON", "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
 	w.WriteHeader(http.StatusOK)
+	w.Write(iterationsJson)
 }
 
 func (s *server) notes(w http.ResponseWriter, req *http.Request) {
