@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 
@@ -49,20 +50,20 @@ func serve(cmd *cobra.Command, args []string) {
 	http.HandleFunc("/iterations", server.iterations)
 
 	address := "0.0.0.0:8090"
-	fmt.Println("Listening on: " + address)
+	slog.Info("Listening on: " + address)
 	http.ListenAndServe(address, nil)
 }
 
 func (s *server) iterations(w http.ResponseWriter, req *http.Request) {
 	iterations, err := s.apiClient.GetAllIterations()
 	if err != nil {
-		fmt.Printf("Error fetching iterations: %s\n", err)
+		slog.Error("Error fetching iterations: %s\n", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if len(iterations) == 0 {
-		fmt.Println("No iterations")
+		 slog.Warn("No iterations")
 	}
 
 	for _, it := range iterations {
@@ -105,6 +106,7 @@ func (s *server) notes(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		errMsg := fmt.Sprintf("Failed to read notes-dir at %s: %s", s.config.NotesDir, err.Error())
+		slog.Error(errMsg)
 		w.Write([]byte(errMsg))
 		return
 	}

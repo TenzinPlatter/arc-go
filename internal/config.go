@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 
 	"os"
 	"strings"
@@ -35,6 +36,7 @@ func replaceTilde(s string) (string, error) {
 
 // Parse a `Config` object from the given file path
 func ParseConfig(filePath string) (Config, error) {
+	slog.Debug("Parsing config from " + filePath)
 	filePath, err := replaceTilde(filePath)
 	if err != nil {
 		return Config{}, nil
