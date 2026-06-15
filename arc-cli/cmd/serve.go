@@ -5,13 +5,11 @@ package cmd
 
 import (
 	"encoding/json"
-	"io/fs"
 	"log"
 	"log/slog"
 	"net/http"
-	"path/filepath"
-	"strings"
 
+	"github.com/arc/arc-cli/internal/notes"
 	"github.com/arc/internal"
 	"github.com/arc/internal/shortcut"
 	"github.com/spf13/cobra"
@@ -20,11 +18,6 @@ import (
 type server struct {
 	config    *internal.Config
 	apiClient *shortcut.Client
-}
-
-type notesResponse struct {
-	NotesDir      string   `json:"notes_dir"`
-	NotesRelPaths []string `json:"notes"`
 }
 
 // serveCmd represents the serve command
@@ -60,6 +53,11 @@ func serve(cmd *cobra.Command, args []string) {
 	http.ListenAndServe(address, nil)
 }
 
+func isGETRequest(req *http.Request) bool {
+	// empty string is documented to represent GET
+	return req.Method == "GET" || req.Method == ""
+}
+
 func (s *server) iterations(w http.ResponseWriter, req *http.Request) {
 	active := req.URL.Query().Get("active")
 	var iterations []shortcut.Iteration
@@ -92,44 +90,26 @@ func (s *server) iterations(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *server) notes(w http.ResponseWriter, req *http.Request) {
-	if req.Method != "" && req.Method != "GET" {
-		// not a GET request
+	if !isGETRequest(req) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	type note struct {
-		fullPath string
-		entry    fs.DirEntry
-	}
-	notes := []note{}
-
-	err := filepath.WalkDir(s.config.NotesDir, func(path string, d fs.DirEntry, err error) error {
-		// if d is a dir we want to return nil, but returning err is fine since if we got to that
-		// check err == nil
-		if err != nil {
-			return err
-		}
-		if !d.IsDir() {
-			notes = append(notes, note{fullPath: path, entry: d})
-		}
-		return nil
-	})
-
+	noteList, err := notes.CollectNotesFrom(s.config.NotesDir)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		slog.Error("Failed to read notes-dir", "notes-dir", s.config.NotesDir, "error", err)
 		return
 	}
 
-	notesRelPaths := []string{}
-	for _, note := range notes {
-		relPath := strings.Replace(note.fullPath, s.config.NotesDir + "/", "", 1)
-		notesRelPaths = append(notesRelPaths, relPath)
+	if req.URL.Query().Get("content") == "true" {
+		errs := notes.FillAllNoteContents(noteList)
+		for _, err := range errs {
+			slog.Error("Failed to get note content", "error", err)
+		}
 	}
 
-	resp := notesResponse{NotesRelPaths: notesRelPaths, NotesDir: s.config.NotesDir}
-	bytes, err := json.Marshal(resp)
+	bytes, err := json.Marshal(noteList)
 	if err != nil {
 		slog.Error("Failed to convert notes to JSON", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
