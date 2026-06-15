@@ -5,12 +5,12 @@ package cmd
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/fs"
 	"log"
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"strings"
 
 	"github.com/arc/internal"
 	"github.com/arc/internal/shortcut"
@@ -20,6 +20,11 @@ import (
 type server struct {
 	config    *internal.Config
 	apiClient *shortcut.Client
+}
+
+type notesResponse struct {
+	NotesDir      string   `json:"notes_dir"`
+	NotesRelPaths []string `json:"notes"`
 }
 
 // serveCmd represents the serve command
@@ -35,12 +40,12 @@ func init() {
 }
 
 func serve(cmd *cobra.Command, args []string) {
-	configPathOverride, err := cmd.Flags().GetString("config-file")
+	configPath, err := cmd.Flags().GetString("config-file")
 	if err != nil {
 		log.Fatal("Failed to read config-file flag" + err.Error())
 	}
 
-	config, err := internal.ParseConfig(configPathOverride)
+	config, err := internal.ParseConfig(configPath)
 	if err != nil {
 		log.Fatal("Failed to parse config: " + err.Error())
 	}
@@ -93,8 +98,12 @@ func (s *server) notes(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	fmt.Println("notes-dir: " + s.config.NotesDir)
-	entries := []fs.DirEntry{}
+	type note struct {
+		fullPath string
+		entry    fs.DirEntry
+	}
+	notes := []note{}
+
 	err := filepath.WalkDir(s.config.NotesDir, func(path string, d fs.DirEntry, err error) error {
 		// if d is a dir we want to return nil, but returning err is fine since if we got to that
 		// check err == nil
@@ -102,24 +111,31 @@ func (s *server) notes(w http.ResponseWriter, req *http.Request) {
 			return err
 		}
 		if !d.IsDir() {
-			entries = append(entries, d)
+			notes = append(notes, note{fullPath: path, entry: d})
 		}
 		return nil
 	})
 
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		errMsg := fmt.Sprintf("Failed to read notes-dir at %s: %s", s.config.NotesDir, err.Error())
-		slog.Error(errMsg)
-		w.Write([]byte(errMsg))
+		slog.Error("Failed to read notes-dir", "notes-dir", s.config.NotesDir, "error", err)
 		return
 	}
 
-	fmt.Println("Notes: ")
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			fmt.Println("Entry: ", entry.Name())
-		}
+	notesRelPaths := []string{}
+	for _, note := range notes {
+		relPath := strings.Replace(note.fullPath, s.config.NotesDir + "/", "", 1)
+		notesRelPaths = append(notesRelPaths, relPath)
 	}
+
+	resp := notesResponse{NotesRelPaths: notesRelPaths, NotesDir: s.config.NotesDir}
+	bytes, err := json.Marshal(resp)
+	if err != nil {
+		slog.Error("Failed to convert notes to JSON", "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
+	w.Write(bytes)
 }

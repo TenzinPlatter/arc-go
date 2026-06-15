@@ -3,7 +3,6 @@ package internal
 import (
 	"errors"
 	"fmt"
-	"log"
 	"log/slog"
 
 	"os"
@@ -50,14 +49,19 @@ func ParseConfig(filePath string) (Config, error) {
 }
 
 func configFromKoanfGlobal() (Config, error) {
-	notesDir := k.String("notes-dir")
+	notesDir, err := replaceTilde(k.String("notes-dir"))
 	if notesDir == "" {
-		log.Fatal("`notes-dir` must be in config file and non-empty")
+		return Config{}, errors.New("`notes-dir` must be non empty")
+	}
+	if err != nil {
+		return Config{}, fmt.Errorf("Failed to parse config: %s\n", err.Error())
 	}
 
+	notesDir = strings.TrimSuffix(notesDir, "/")
+	
 	apiToken := k.String("api-token")
 	if apiToken == "" {
-		log.Fatal("`api-token` config field must be set and non-empty")
+		return Config{}, errors.New("`api-token` config field must be set and non-empty")
 	}
 
 	return Config{NotesDir: notesDir, ApiToken: apiToken}, nil
