@@ -19,6 +19,11 @@ type Iteration struct {
 	Status string `json:"status"`
 }
 
+type ShortcutError struct {
+	Message string `json:"message"`
+	Tag string `json:"tag"`
+}
+
 func NewClient(apiToken string) Client {
 	client := http.Client {}
 	return Client{apiToken: apiToken, client: client}
@@ -44,7 +49,9 @@ func (c *Client) shortcutGet(endpoint string, buf any) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Failed to GET %s", endpoint)
+		var error ShortcutError
+		json.NewDecoder(resp.Body).Decode(&error)
+		return fmt.Errorf("Failed to GET %s: %s", endpoint, error)
 	}
 
 	return json.NewDecoder(resp.Body).Decode(buf)

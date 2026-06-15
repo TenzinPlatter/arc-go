@@ -57,13 +57,13 @@ func serve(cmd *cobra.Command, args []string) {
 func (s *server) iterations(w http.ResponseWriter, req *http.Request) {
 	iterations, err := s.apiClient.GetAllIterations()
 	if err != nil {
-		slog.Error("Error fetching iterations: %s\n", err)
+		slog.Error("Error fetching iterations", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if len(iterations) == 0 {
-		 slog.Warn("No iterations")
+		slog.Warn("No iterations")
 	}
 
 	for _, it := range iterations {
